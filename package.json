@@ -1,0 +1,10 @@
+{
+  "name": "mayochan-telegram-inline-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/convert-telegram-export.js",
+    "convert": "node scripts/convert-telegram-export.js",
+    "test": "node --test"
+  }
+}
