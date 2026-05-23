@@ -189,6 +189,47 @@ test("returns a random sample when inline query text is empty", async () => {
   );
 });
 
+test("limits large search result sets before sending them to Telegram", async () => {
+  process.env.BOT_TOKEN = "test-token";
+
+  let capturedPayload;
+  globalThis.fetch = async (_url, options) => {
+    capturedPayload = JSON.parse(options.body);
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true };
+      },
+    };
+  };
+
+  const response = createResponseRecorder();
+  const largeQuoteSet = Array.from({ length: 80 }, (_, index) => `猫 quote ${index + 1}`);
+  const handler = createTelegramHandler({
+    loadQuotes() {
+      return largeQuoteSet;
+    },
+  });
+
+  await handler(
+    createRequest({
+      method: "POST",
+      body: {
+        inline_query: {
+          id: "large-match-set",
+          query: "猫",
+        },
+      },
+    }),
+    response
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body, "OK");
+  assert.ok(capturedPayload.results.length <= 50);
+});
+
 test("returns a controlled error when fetch is unavailable downstream", async () => {
   process.env.BOT_TOKEN = "test-token";
   delete globalThis.fetch;
