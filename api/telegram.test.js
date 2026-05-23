@@ -183,14 +183,19 @@ test("returns a random sample when inline query text is empty", async () => {
   assert.equal(response.statusCode, 200);
   assert.equal(response.body, "OK");
   assert.equal(capturedPayload.inline_query_id, "sample-1");
-  assert.deepEqual(
-    capturedPayload.results.map((result) => result.title),
-    ["First quote", "Second quote", "Third quote"]
+  assert.equal(capturedPayload.results.length, 3);
+  assert.ok(
+    capturedPayload.results.every((result) => [
+      "First quote",
+      "Second quote",
+      "Third quote",
+    ].includes(result.title))
   );
 });
 
 test("limits large search result sets before sending them to Telegram", async () => {
   process.env.BOT_TOKEN = "test-token";
+  Math.random = () => 0;
 
   let capturedPayload;
   globalThis.fetch = async (_url, options) => {
@@ -228,6 +233,55 @@ test("limits large search result sets before sending them to Telegram", async ()
   assert.equal(response.statusCode, 200);
   assert.equal(response.body, "OK");
   assert.ok(capturedPayload.results.length <= 50);
+  assert.notDeepEqual(
+    capturedPayload.results.map((result) => result.title),
+    largeQuoteSet.slice(0, 50)
+  );
+});
+
+test("uses true random sampling instead of a continuous slice for empty queries", async () => {
+  process.env.BOT_TOKEN = "test-token";
+  Math.random = () => 0;
+
+  let capturedPayload;
+  globalThis.fetch = async (_url, options) => {
+    capturedPayload = JSON.parse(options.body);
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true };
+      },
+    };
+  };
+
+  const response = createResponseRecorder();
+  const quotes = ["First quote", "Second quote", "Third quote", "Fourth quote"];
+  const handler = createTelegramHandler({
+    loadQuotes() {
+      return quotes;
+    },
+  });
+
+  await handler(
+    createRequest({
+      method: "POST",
+      body: {
+        inline_query: {
+          id: "random-empty-query",
+          query: "",
+        },
+      },
+    }),
+    response
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body, "OK");
+  assert.notDeepEqual(
+    capturedPayload.results.map((result) => result.title),
+    quotes
+  );
 });
 
 test("returns a controlled error when fetch is unavailable downstream", async () => {
